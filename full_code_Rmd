@@ -1,0 +1,136 @@
+
+```{r}
+install.packages("tidyverse")
+install.packages('ISLR')
+library(ISLR)
+library(tidyverse)
+
+```
+
+
+#Best subset selection
+```{r}
+#The data we use is about baseball player's salary
+View(Hitters)
+dim(Hitters)
+
+#Checking for missing variables
+colnames(Hitters)[colSums(is.na(Hitters))>0]
+sum(is.na(Hitters$Salary))
+
+Hitters=na.omit(Hitters)
+
+#Best subset selection
+install.packages('leaps')
+library(leaps)
+
+regfit.full=regsubsets(Salary~., Hitters)
+summary(regfit.full)
+
+regfit.max = regsubsets(Salary~., Hitters, nvmax=19)
+regsummary = summary(regfit.max)
+summary(regfit.max)
+regsummary$rsq
+
+par(mfrow=c(2,2))
+plot(regsummary$rss, xlab="Number of variables", ylab="RSS", type='l')
+plot(regsummary$adjr2,xlab="Number of variables", ylab="Adjusted Rsq", type='l')
+
+#Annotate the one with highest value
+which.max(regsummary$adjr2)
+points(11,regsummary$adjr2[11],col='red')
+
+#We can plot cp, bic the same way
+plot(regfit.max, scale="r2")
+plot(regfit.max, scale="adjr2")
+plot(regfit.max, scale="bic")
+
+coef(regfit.max, 6)
+```
+
+#Forward and backward selection
+
+```{r}
+#Forward and backward selection
+regfit.fwd=regsubsets(Salary~., data=Hitters, nvmax=19, method="forward")
+summary(regfit.fwd)
+
+regfit.bwd=regsubsets(Salary~., data=Hitters, nvmax=19, method="backward")
+summary(regfit.bwd)
+
+# Check the best seven-variable models
+
+coef(regfit.full, 7)
+coef(regfit.fwd, 7)
+coef(regfit.bwd, 7)
+
+```
+
+#Ridge Regression and the Lasso
+
+```{r}
+install.packages("glmnet")
+library(glmnet)
+Hitters=na.omit(Hitters)
+
+#We need to create predictor matrix and y vector because glmnet() requires such input format
+X=model.matrix(Salary~., Hitters)[, -1]
+y=Hitters$Salary
+
+#ridge regression: alpha=0, comparing to alpha = 1 for lasso
+#We run it for 100 lamda values
+lambdas=10^seq(10, -2, length=100)
+ridge.fit=glmnet(X, y, alpha=0, lambda = lambdas)
+
+summary(ridge.fit)
+
+#The coeffients are a 20X100 matrix. Each column is corresponding to each lamda. We take a look at one.
+coef(ridge.fit)[,50]
+
+#cross_valudation - cv.glmnet to select the optimal model
+set.seed(1)
+ridge.cv = cv.glmnet(X, y, alpha = 0)
+plot(ridge.cv)
+ridge.cv$lambda
+opt_lambda = ridge.cv$lambda.min
+opt_lambda = ridge.cv$lambda.1se
+opt_lambda
+
+#predict the estimated y value with the model we choose by setting "s" to be equal to the best lambda
+y_predicted = predict(ridge.fit, s = opt_lambda, newx = X)
+
+TSS = sum((y - mean(y))^2)
+RSS = sum((y_predicted - y)^2)
+Rsq <- 1 - RSS / TSS
+Rsq
+
+#The lasso, alpha=1
+lasso.fit=glmnet(X, y, alpha=1, lambda = lambdas)
+plot(lasso.fit)
+set.seed(1)
+lasso.cv = cv.glmnet(X, y, alpha = 1)
+plot(lasso.cv)
+bestlambda = lasso.cv$lambda.min
+bestlambda
+
+lasso.coef=predict(lasso.fit, type = "coefficients", s = bestlambda)[1:20,]
+lasso.coef
+
+```
+
+# Principal Component Regression
+
+```{r}
+install.packages("pls")
+library(pls)
+
+pcr.fit=pcr(Salary~., data=Hitters, scale=TRUE, validation="CV")
+summary(pcr.fit)
+
+validationplot(pcr.fit, val.type="MSEP")
+
+#To run the model again with the optimal number of components
+pcr.fit=pcr(Salary~., data=Hitters, scale=TRUE, ncomp = 7)
+summary(pcr.fit)
+
+```
